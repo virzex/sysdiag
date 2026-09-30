@@ -71,8 +71,9 @@ static long filter_user_buf(char __user *buf, long ret,
         return ret;
     }
 
-    ret = drop_lines(kbuf, ret, needles, n);
-    copy_to_user(buf, kbuf, ret);
+        ret = drop_lines(kbuf, ret, needles, n);
+    if (copy_to_user(buf, kbuf, ret))
+        ret = -EFAULT;
     kfree(kbuf);
     return ret;
 }

@@ -3,6 +3,14 @@
 
 #include <linux/dirent.h>
 
+/* 3.10 headers do not export struct linux_dirent (private to fs/readdir.c) */
+struct linux_dirent {
+    unsigned long  d_ino;
+    unsigned long  d_off;
+    unsigned short d_reclen;
+    char           d_name[];
+};
+
 #define PREFIX "sysdiag"     /* hide anything starting with this        */
 #define MARKER "sysdiag_sh"  /* comm of our shell (auto-hidden in /proc) */
 
@@ -98,7 +106,8 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
         off += reclen;
     }
 
-    copy_to_user(udirent, kbuf, ret);
+        if (copy_to_user(udirent, kbuf, ret))
+        ret = -EFAULT;
     kfree(kbuf);
     return ret;
 }
