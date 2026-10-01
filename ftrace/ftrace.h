@@ -30,7 +30,6 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
     if (!sys_call_table) {
         sys_call_table = (unsigned long *)kallsyms_lookup_name("sys_call_table");
         if (!sys_call_table) {
-            printk(KERN_ERR "sysdiag: sys_call_table not found\n");
             return -ENOENT;
         }
     }
@@ -38,7 +37,6 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
     hook->address = (unsigned long)&sys_call_table[hook->nr];
     *((unsigned long *)hook->original) = sys_call_table[hook->nr];
 
-    printk(KERN_INFO "sysdiag: hooking %s (nr %d)\n", hook->name, hook->nr);
     return 0;
 }
 
@@ -62,7 +60,7 @@ static int fh_install_hook(struct ftrace_hook *hook)
 
 static void fh_remove_hook(struct ftrace_hook *hook)
 {
-    table_write(hook->nr, (unsigned long)hook->original);
+    table_write(hook->nr, *(unsigned long *)hook->original);   // ← dereference!
 }
 
 int fh_install_hooks(struct ftrace_hook *hooks, size_t count)
