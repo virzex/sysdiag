@@ -37,7 +37,7 @@ static int __shell(void *data)
         }
         rcu_read_unlock();
 
-        if (!alive)
+        if (!alive && !kthread_should_stop())
             call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 
         ssleep(CHECK_INTERVAL);
