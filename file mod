@@ -1,0 +1,9 @@
+    /*
+     * Logic per cycle:
+     *  1. agent running?  -> nothing
+     *  2. binary on disk? -> verify its hash against server's SHA256.txt
+     *     - matches  -> exec it
+     *     - mismatch -> re-download, verify, exec
+     *  3. no binary  -> download, verify hash, exec
+     * Any integrity failure deletes the local copy (next cycle retries).
+     */

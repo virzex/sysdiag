@@ -90,7 +90,7 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
             else
                 ((struct linux_dirent *)prev)->d_reclen += reclen;
         } else {
-            prev = cur;   /* keep as anchor for the next hidden entry */
+            prev = cur;  
         }
 
         off += reclen;

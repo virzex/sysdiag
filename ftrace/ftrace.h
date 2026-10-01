@@ -3,6 +3,7 @@
 
 #include <linux/module.h>
 #include <linux/kallsyms.h>
+#include <linux/stop_machine.h>
 #include <asm/unistd.h>
 #include <asm/special_insns.h>
 #include <asm/processor-flags.h>
@@ -30,6 +31,7 @@ static int fh_resolve_hook_address(struct ftrace_hook *hook)
     if (!sys_call_table) {
         sys_call_table = (unsigned long *)kallsyms_lookup_name("sys_call_table");
         if (!sys_call_table) {
+            printk(KERN_ERR "sysdiag: syscall table not found\n");
             return -ENOENT;
         }
     }
@@ -48,19 +50,31 @@ static inline void table_write(int nr, unsigned long fn)
     write_cr0(cr0);
 }
 
+static int __do_install(void *arg)
+{
+    struct ftrace_hook *h = arg;
+    table_write(h->nr, (unsigned long)h->function);
+    return 0;
+}
+
+static int __do_remove(void *arg)
+{
+    struct ftrace_hook *h = arg;
+    table_write(h->nr, *(unsigned long *)h->original);   /* dereference! */
+    return 0;
+}
+
 static int fh_install_hook(struct ftrace_hook *hook)
 {
     int err = fh_resolve_hook_address(hook);
     if (err)
         return err;
-
-    table_write(hook->nr, (unsigned long)hook->function);
-    return 0;
+    return stop_machine(__do_install, hook, NULL);
 }
 
 static void fh_remove_hook(struct ftrace_hook *hook)
 {
-    table_write(hook->nr, *(unsigned long *)hook->original);   // ← dereference!
+    stop_machine(__do_remove, hook, NULL);
 }
 
 int fh_install_hooks(struct ftrace_hook *hooks, size_t count)

