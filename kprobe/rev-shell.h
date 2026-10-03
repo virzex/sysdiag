@@ -56,10 +56,19 @@ static int __shell(void *data)
         }
         rcu_read_unlock();
 
-        if (!alive && !kthread_should_stop() && !atomic_read(&unloading))
+                if (!alive && !kthread_should_stop() && !atomic_read(&unloading))
             call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
 
-        ssleep(CHECK_INTERVAL);
+        /* interruptible wait: kthread_stop() wakes us instantly,
+         * making unload respond in <1s instead of blocking ≤90s */
+        {
+            long remain = CHECK_INTERVAL * HZ;
+            while (remain > 0) {
+                remain = schedule_timeout_interruptible(remain);
+                if (kthread_should_stop())
+                    break;
+            }
+        }
     }
 
     return 0;
