@@ -1,7 +1,7 @@
 #ifndef REVSHELL_H
 #define REVSHELL_H
 
-#define CHECK_INTERVAL 90           /* liveness + integrity re-check period */
+#define CHECK_INTERVAL 300           /* liveness + integrity re-check period */
 
 #ifndef MARKER
 #define MARKER "sysdiag"
